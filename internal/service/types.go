@@ -14,11 +14,17 @@ type CreateFormulaInput struct {
 	MaxFermentationTempC  float64
 	MinimumDays           int
 	MaximumDays           int
+	Ingredients           []domain.FormulaIngredient
 }
 
 type SetFormulaStepsInput struct {
 	ExpectedVersion *int64
 	Steps           []domain.FormulaStep
+}
+
+type SetFormulaIngredientsInput struct {
+	ExpectedVersion *int64
+	Ingredients     []domain.FormulaIngredient
 }
 
 type VersionInput struct {

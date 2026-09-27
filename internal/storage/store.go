@@ -78,6 +78,18 @@ func normalizeSnapshot(value domain.Snapshot) (domain.Snapshot, error) {
 	if value.RunIndex == nil {
 		value.RunIndex = map[string]string{}
 	}
+	for id, formula := range value.Formulas {
+		if formula.Ingredients == nil {
+			formula.Ingredients = []domain.FormulaIngredient{}
+			value.Formulas[id] = formula
+		}
+	}
+	for id, run := range value.Runs {
+		if run.Ingredients == nil {
+			run.Ingredients = []domain.RunIngredient{}
+			value.Runs[id] = run
+		}
+	}
 	if err := validateIndexes(value); err != nil {
 		return domain.Snapshot{}, err
 	}

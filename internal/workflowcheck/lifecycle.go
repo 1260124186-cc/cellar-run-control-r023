@@ -34,6 +34,23 @@ func vesselRunLifecycle(api *client) error {
 	if err := firstResponse.decode(&first); err != nil {
 		return err
 	}
+	if first.FormulaVersion != formula.Version {
+		return errInvalidWorkflow("run did not record the formula version it adopted")
+	}
+	formulaResponse, err := api.call("GET", "/v1/formulas/"+formula.ID, nil, nil)
+	if err != nil {
+		return err
+	}
+	if err := requireStatus(formulaResponse, 200, "read formula for run cross-check"); err != nil {
+		return err
+	}
+	var formulaDetail formulaView
+	if err := formulaResponse.decode(&formulaDetail); err != nil {
+		return err
+	}
+	if err := requireIngredientSnapshot(first, formulaDetail); err != nil {
+		return err
+	}
 
 	secondResponse, err := api.call("POST", "/v1/runs",
 		createRunPayload("RUN-LIFECYCLE-B", formula.ID), nil)

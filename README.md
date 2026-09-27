@@ -71,8 +71,15 @@ Formula workflow:
 - `GET /v1/formulas`
 - `GET /v1/formulas/{id}`
 - `PUT /v1/formulas/{id}/steps`
+- `PUT /v1/formulas/{id}/ingredients`
 - `POST /v1/formulas/{id}/approve`
 - `POST /v1/formulas/{id}/retire`
+
+A formula carries an ordered ingredient list (`sequence`, `name`, `unit`,
+`quantity_per_liter`). The list can be supplied at creation or replaced
+atomically while the formula is a draft; approval freezes it. Each run created
+from an approved formula snapshots the list, the formula version, and the
+planned quantity of every ingredient computed from the run planned volume.
 
 Vessel workflow:
 

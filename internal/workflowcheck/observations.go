@@ -151,6 +151,9 @@ func observationsCompletion(api *client) error {
 	if len(readBack.Observations) != 3 || readBack.Metrics == nil {
 		return errInvalidWorkflow("completed run lost observations or metrics")
 	}
+	if len(readBack.Ingredients) != 2 {
+		return errInvalidWorkflow("completed run lost its ingredient snapshot")
+	}
 	return nil
 }
 

@@ -26,8 +26,8 @@ deferred to a later engineering task.
 
 A formula contains an identifier, normalized name, style label, target original
 gravity, target final gravity, maximum fermentation temperature, minimum and
-maximum planned days, ordered process steps, lifecycle state, version, and
-timestamps.
+maximum planned days, ordered process steps, ordered ingredient items,
+lifecycle state, version, and timestamps.
 
 States are `draft`, `approved`, and `retired`.
 
@@ -41,7 +41,13 @@ States are `draft`, `approved`, and `retired`.
 - Step sequence values must be contiguous and start at 1.
 - Step temperatures are in the inclusive range 5 to 90 Celsius.
 - Step hold times are 1 to 1440 minutes.
-- `draft -> approved` requires a complete valid step list.
+- A formula has 0 to 64 ingredient items while drafting.
+- Ingredient sequence values must be contiguous and start at 1.
+- Ingredient names are required and limited to 120 characters; units are
+  required and limited to 16 characters.
+- Ingredient quantity per liter is finite, greater than zero, and at most
+  1000000.
+- `draft -> approved` requires a complete valid step list and ingredient list.
 - An approved formula is immutable.
 - `approved -> retired` is allowed only when no run currently uses it.
 
@@ -64,14 +70,23 @@ States are `available`, `reserved`, `in_use`, `cleaning`, and `retired`.
 ### FermentationRun
 
 A run contains an identifier, unique run code, an approved formula identifier,
-an optional vessel identifier, planned volume, notes, lifecycle state,
-timetable, ordered observations, final metrics, version, and timestamps.
+the formula version adopted at creation, an optional vessel identifier,
+planned volume, an ordered ingredient quantity snapshot, notes, lifecycle
+state, timetable, ordered observations, final metrics, version, and
+timestamps.
 
 States are `planned`, `reserved`, `fermenting`, `conditioning`, `completed`,
 and `aborted`.
 
 - Planned volume is greater than zero and cannot exceed vessel capacity.
 - Only an approved formula may be attached to a run.
+- Run creation copies the approved formula ingredient list and records the
+  formula version it was taken from.
+- Each snapshot line keeps the sequence, name, unit, and quantity per liter of
+  its formula source and adds the planned quantity computed as quantity per
+  liter multiplied by planned volume, rounded to three decimals.
+- The ingredient snapshot never changes after run creation, so a run detail
+  and its formula detail explain the same quantities.
 - `planned -> reserved` atomically reserves an available vessel.
 - `reserved -> fermenting` requires that the vessel still belongs to the run.
 - `fermenting -> conditioning` requires at least two observations.
@@ -105,12 +120,15 @@ Public entry points are:
 
 - `POST /v1/formulas`
 - `PUT /v1/formulas/{id}/steps`
+- `PUT /v1/formulas/{id}/ingredients`
 - `POST /v1/formulas/{id}/approve`
 - `GET /v1/formulas/{id}`
 
-The client creates a draft, sets its process step list atomically, approves it,
-and reads the approved record. Invalid ranges, duplicate names, empty steps,
-and repeated approval return stable error codes without partial writes.
+The client creates a draft, sets its process step list and ingredient list
+atomically, approves it, and reads the approved record. Invalid ranges,
+invalid ingredient quantities, duplicate sequences, duplicate names, empty
+steps or ingredients, and repeated approval return stable error codes without
+partial writes.
 
 This path crosses HTTP protocol handling, application orchestration, domain
 rules, and snapshot storage.
@@ -126,7 +144,9 @@ Public entry points are:
 - `GET /v1/runs/{id}`
 
 The client registers a vessel, creates a planned run against an approved
-formula, reserves the vessel, starts fermentation, and reads the run. Capacity
+formula, reserves the vessel, starts fermentation, and reads the run. Run
+creation snapshots the formula ingredient list scaled by planned volume, and
+the run detail keeps that snapshot with its calculation basis. Capacity
 conflicts, an unavailable vessel, duplicate run codes, and stale versions
 produce stable failures without changing vessel or run state.
 

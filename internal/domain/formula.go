@@ -22,26 +22,28 @@ type FormulaStep struct {
 }
 
 type Formula struct {
-	ID                    string        `json:"id"`
-	Name                  string        `json:"name"`
-	Style                 string        `json:"style"`
-	TargetOriginalGravity float64       `json:"target_original_gravity"`
-	TargetFinalGravity    float64       `json:"target_final_gravity"`
-	MaxFermentationTempC  float64       `json:"max_fermentation_temp_c"`
-	MinimumDays           int           `json:"minimum_days"`
-	MaximumDays           int           `json:"maximum_days"`
-	Steps                 []FormulaStep `json:"steps"`
-	State                 FormulaState  `json:"state"`
-	Version               int64         `json:"version"`
-	CreatedAt             time.Time     `json:"created_at"`
-	UpdatedAt             time.Time     `json:"updated_at"`
-	ApprovedAt            *time.Time    `json:"approved_at,omitempty"`
-	RetiredAt             *time.Time    `json:"retired_at,omitempty"`
+	ID                    string              `json:"id"`
+	Name                  string              `json:"name"`
+	Style                 string              `json:"style"`
+	TargetOriginalGravity float64             `json:"target_original_gravity"`
+	TargetFinalGravity    float64             `json:"target_final_gravity"`
+	MaxFermentationTempC  float64             `json:"max_fermentation_temp_c"`
+	MinimumDays           int                 `json:"minimum_days"`
+	MaximumDays           int                 `json:"maximum_days"`
+	Steps                 []FormulaStep       `json:"steps"`
+	Ingredients           []FormulaIngredient `json:"ingredients"`
+	State                 FormulaState        `json:"state"`
+	Version               int64               `json:"version"`
+	CreatedAt             time.Time           `json:"created_at"`
+	UpdatedAt             time.Time           `json:"updated_at"`
+	ApprovedAt            *time.Time          `json:"approved_at,omitempty"`
+	RetiredAt             *time.Time          `json:"retired_at,omitempty"`
 }
 
 func (f Formula) Clone() Formula {
 	cloned := f
 	cloned.Steps = append([]FormulaStep(nil), f.Steps...)
+	cloned.Ingredients = append([]FormulaIngredient(nil), f.Ingredients...)
 	return cloned
 }
 
@@ -90,8 +92,14 @@ func (f Formula) Validate() error {
 	if len(f.Steps) > 24 {
 		return FieldError(CodeInvalidInput, "steps", "must contain at most 24 entries")
 	}
+	if len(f.Ingredients) > 64 {
+		return FieldError(CodeInvalidInput, "ingredients", "must contain at most 64 entries")
+	}
 	if f.State == FormulaApproved || f.State == FormulaRetired {
 		if err := ValidateFormulaSteps(f.Steps, true); err != nil {
+			return err
+		}
+		if err := ValidateFormulaIngredients(f.Ingredients, true); err != nil {
 			return err
 		}
 	}
@@ -143,11 +151,27 @@ func (f *Formula) SetSteps(steps []FormulaStep) error {
 	return nil
 }
 
+func (f *Formula) SetIngredients(ingredients []FormulaIngredient) error {
+	if f.State != FormulaDraft {
+		return NewError(CodeFormulaState, "only a draft formula can change ingredients")
+	}
+	if err := ValidateFormulaIngredients(ingredients, false); err != nil {
+		return err
+	}
+	f.Ingredients = append([]FormulaIngredient(nil), ingredients...)
+	f.UpdatedAt = time.Now().UTC()
+	f.Version++
+	return nil
+}
+
 func (f *Formula) Approve(now time.Time) error {
 	if f.State != FormulaDraft {
 		return NewError(CodeFormulaState, "only a draft formula can be approved")
 	}
 	if err := ValidateFormulaSteps(f.Steps, true); err != nil {
+		return err
+	}
+	if err := ValidateFormulaIngredients(f.Ingredients, true); err != nil {
 		return err
 	}
 	stamp := now.UTC()
