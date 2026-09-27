@@ -71,8 +71,24 @@ Formula workflow:
 - `GET /v1/formulas`
 - `GET /v1/formulas/{id}`
 - `PUT /v1/formulas/{id}/steps`
+- `PUT /v1/formulas/{id}/ingredients`
 - `POST /v1/formulas/{id}/approve`
 - `POST /v1/formulas/{id}/retire`
+
+A formula draft carries an ordered ingredient list alongside its process
+steps. Each ingredient has a contiguous 1-based `sequence`, a `name`, and a
+`grams_per_liter` rate that must be finite and greater than zero. The whole
+list is replaced through `PUT /v1/formulas/{id}/ingredients`. Approval requires
+at least one valid step and one valid ingredient, and after approval neither
+list can change.
+
+When a run is created, the service freezes a `recipe` snapshot computed from
+the approved formula and the run planned volume. Every line records the
+approved ingredient, both factors (`grams_per_liter` and
+`planned_volume_liters`), and the resulting `quantity_grams`
+(`grams_per_liter * planned_volume_liters`, rounded to three decimals), so the
+run detail and formula detail together explain each quantity. The snapshot is
+kept on the run for its whole life and is never recomputed.
 
 Vessel workflow:
 

@@ -8,10 +8,12 @@ import (
 )
 
 type formulaView struct {
-	ID      string               `json:"id"`
-	State   domain.FormulaState  `json:"state"`
-	Version int64                `json:"version"`
-	Steps   []domain.FormulaStep `json:"steps"`
+	ID          string                     `json:"id"`
+	Name        string                     `json:"name"`
+	State       domain.FormulaState        `json:"state"`
+	Version     int64                      `json:"version"`
+	Steps       []domain.FormulaStep       `json:"steps"`
+	Ingredients []domain.FormulaIngredient `json:"ingredients"`
 }
 
 type vesselView struct {
@@ -23,11 +25,13 @@ type vesselView struct {
 
 type runView struct {
 	ID           string                      `json:"id"`
+	Code         string                      `json:"code"`
 	State        domain.RunState             `json:"state"`
 	Version      int64                       `json:"version"`
 	VesselID     *string                     `json:"vessel_id"`
 	Observations []domain.GravityObservation `json:"observations"`
 	Metrics      *domain.RunMetrics          `json:"metrics"`
+	Recipe       *domain.RecipeSnapshot      `json:"recipe"`
 }
 
 type pairView struct {
@@ -68,6 +72,16 @@ func formulaStepPayload() map[string]any {
 				"temperature_c": 19.0,
 				"hold_minutes":  240,
 			},
+		},
+	}
+}
+
+func formulaIngredientPayload() map[string]any {
+	return map[string]any{
+		"ingredients": []map[string]any{
+			{"sequence": 1, "name": "Pale malt", "grams_per_liter": 200.0},
+			{"sequence": 2, "name": "Cascade hops", "grams_per_liter": 1.5},
+			{"sequence": 3, "name": "Ale yeast", "grams_per_liter": 0.75},
 		},
 	}
 }

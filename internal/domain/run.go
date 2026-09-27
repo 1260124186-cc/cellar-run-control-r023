@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 type RunState string
 
@@ -25,6 +28,7 @@ type FermentationRun struct {
 	EndedAt        *time.Time           `json:"ended_at,omitempty"`
 	Observations   []GravityObservation `json:"observations"`
 	Metrics        *RunMetrics          `json:"metrics,omitempty"`
+	Recipe         *RecipeSnapshot      `json:"recipe,omitempty"`
 	Version        int64                `json:"version"`
 	CreatedAt      time.Time            `json:"created_at"`
 	UpdatedAt      time.Time            `json:"updated_at"`
@@ -49,6 +53,10 @@ func (r FermentationRun) Clone() FermentationRun {
 		value := *r.Metrics
 		cloned.Metrics = &value
 	}
+	if r.Recipe != nil {
+		value := r.Recipe.Clone()
+		cloned.Recipe = &value
+	}
 	return cloned
 }
 
@@ -56,9 +64,9 @@ func (r FermentationRun) Validate() error {
 	if err := ValidateRunCode(r.Code, "code"); err != nil {
 		return err
 	}
-	if r.PlannedVolumeL <= 0 {
+	if r.PlannedVolumeL <= 0 || math.IsNaN(r.PlannedVolumeL) || math.IsInf(r.PlannedVolumeL, 0) {
 		return FieldError(CodeInvalidInput, "planned_volume_liters",
-			"must be greater than zero")
+			"must be a positive finite value")
 	}
 	if len([]rune(r.Notes)) > 1000 {
 		return FieldError(CodeInvalidInput, "notes",

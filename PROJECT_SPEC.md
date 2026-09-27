@@ -26,8 +26,8 @@ deferred to a later engineering task.
 
 A formula contains an identifier, normalized name, style label, target original
 gravity, target final gravity, maximum fermentation temperature, minimum and
-maximum planned days, ordered process steps, lifecycle state, version, and
-timestamps.
+maximum planned days, ordered process steps, ordered ingredient items,
+lifecycle state, version, and timestamps.
 
 States are `draft`, `approved`, and `retired`.
 
@@ -41,9 +41,39 @@ States are `draft`, `approved`, and `retired`.
 - Step sequence values must be contiguous and start at 1.
 - Step temperatures are in the inclusive range 5 to 90 Celsius.
 - Step hold times are 1 to 1440 minutes.
-- `draft -> approved` requires a complete valid step list.
-- An approved formula is immutable.
+- A formula has 0 to 48 ingredient items while drafted, and 1 to 48 once it is
+  approved.
+- Ingredient sequence values must be contiguous and start at 1; duplicate
+  sequence values are rejected.
+- An ingredient name is required, trimmed, and at most 120 characters.
+- An ingredient rate in grams per liter must be finite, greater than zero, and
+  at most 100000.
+- A draft may replace its whole ingredient list atomically; an approved or
+  retired formula rejects every ingredient-list change.
+- `draft -> approved` requires a complete valid step list and a complete valid
+  ingredient list.
+- An approved formula is immutable, including its ingredient list.
 - `approved -> retired` is allowed only when no run currently uses it.
+
+### Ingredient Usage Snapshot
+
+When a run is created against an approved formula, the service freezes a recipe
+snapshot on the run. The snapshot records the formula identifier, formula name,
+approved formula version, the run planned volume in liters, capture time, and
+one ordered usage line per approved ingredient. Each usage line carries the
+ingredient sequence and name, the approved grams-per-liter rate, the planned
+volume used in the calculation, and the resulting quantity in grams:
+
+```text
+quantity_grams = grams_per_liter * planned_volume_liters
+```
+
+Quantities are rounded to three decimal places. The snapshot is computed inside
+the run-creation transaction from the approved formula and the requested
+planned volume; a non-positive, infinite, or NaN volume, or a product that
+cannot be represented, fails the creation with no partial write. The snapshot
+is never recomputed or mutated, so a run detail and the current formula detail
+cross-explain every quantity even after the formula is later retired.
 
 ### Vessel
 
@@ -64,8 +94,9 @@ States are `available`, `reserved`, `in_use`, `cleaning`, and `retired`.
 ### FermentationRun
 
 A run contains an identifier, unique run code, an approved formula identifier,
-an optional vessel identifier, planned volume, notes, lifecycle state,
-timetable, ordered observations, final metrics, version, and timestamps.
+an optional vessel identifier, planned volume, notes, the recipe snapshot taken
+at creation, lifecycle state, timetable, ordered observations, final metrics,
+version, and timestamps.
 
 States are `planned`, `reserved`, `fermenting`, `conditioning`, `completed`,
 and `aborted`.
@@ -105,12 +136,15 @@ Public entry points are:
 
 - `POST /v1/formulas`
 - `PUT /v1/formulas/{id}/steps`
+- `PUT /v1/formulas/{id}/ingredients`
 - `POST /v1/formulas/{id}/approve`
 - `GET /v1/formulas/{id}`
 
-The client creates a draft, sets its process step list atomically, approves it,
-and reads the approved record. Invalid ranges, duplicate names, empty steps,
-and repeated approval return stable error codes without partial writes.
+The client creates a draft, sets its process step list and ordered ingredient
+list atomically, approves it, and reads the approved record. Invalid ranges,
+non-positive quantities, duplicate or non-contiguous ingredient sequences,
+duplicate names, empty steps or ingredients, editing an approved list, and
+repeated approval return stable error codes without partial writes.
 
 This path crosses HTTP protocol handling, application orchestration, domain
 rules, and snapshot storage.
@@ -126,9 +160,11 @@ Public entry points are:
 - `GET /v1/runs/{id}`
 
 The client registers a vessel, creates a planned run against an approved
-formula, reserves the vessel, starts fermentation, and reads the run. Capacity
-conflicts, an unavailable vessel, duplicate run codes, and stale versions
-produce stable failures without changing vessel or run state.
+formula (which freezes the ingredient usage snapshot for the planned volume),
+reserves the vessel, starts fermentation, and reads the run. Capacity
+conflicts, an unavailable vessel, duplicate run codes, stale versions, and an
+invalid planned volume produce stable failures without changing vessel or run
+state and without writing a snapshot.
 
 This path crosses HTTP protocol handling, application orchestration, domain
 rules, storage coordination, and resource lifecycle.

@@ -45,6 +45,11 @@ func (s *Service) CreateRun(input CreateRunInput) (domain.FermentationRun, error
 			return domain.NewError(domain.CodeFormulaState,
 				"run requires an approved formula")
 		}
+		recipe, err := domain.BuildRecipeSnapshot(formula, run.PlannedVolumeL, s.clock.Now())
+		if err != nil {
+			return err
+		}
+		run.Recipe = &recipe
 		if _, exists := snapshot.RunIndex[run.Code]; exists {
 			return domain.NewError(domain.CodeRunConflict,
 				"a run with the same code already exists")

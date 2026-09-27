@@ -1,6 +1,11 @@
 package workflowcheck
 
-import "github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
+import (
+	"fmt"
+	"math"
+
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
+)
 
 func vesselRunLifecycle(api *client) error {
 	formula, err := ensureApprovedFormula(api, "Lifecycle Formula")
@@ -32,6 +37,9 @@ func vesselRunLifecycle(api *client) error {
 	}
 	var first runView
 	if err := firstResponse.decode(&first); err != nil {
+		return err
+	}
+	if err := requireRunRecipe(first, formula); err != nil {
 		return err
 	}
 
@@ -110,6 +118,49 @@ func vesselRunLifecycle(api *client) error {
 	}
 	if err := requireRunState(first, domain.RunFermenting); err != nil {
 		return err
+	}
+	if err := requireRunRecipe(first, formula); err != nil {
+		return err
+	}
+	return nil
+}
+
+func requireRunRecipe(run runView, formula formulaView) error {
+	if run.Recipe == nil {
+		return errInvalidWorkflow("run did not retain a recipe snapshot")
+	}
+	snapshot := run.Recipe
+	if snapshot.FormulaID != formula.ID {
+		return errInvalidWorkflow("recipe snapshot references the wrong formula")
+	}
+	if snapshot.FormulaName != formula.Name {
+		return errInvalidWorkflow("recipe snapshot did not capture the formula name")
+	}
+	if snapshot.FormulaVersion != formula.Version {
+		return errInvalidWorkflow("recipe snapshot did not capture the approved version")
+	}
+	const plannedVolume = 180.0
+	if snapshot.PlannedVolumeL != plannedVolume {
+		return errInvalidWorkflow("recipe snapshot did not capture the planned volume")
+	}
+	if len(snapshot.Ingredients) != len(formula.Ingredients) {
+		return errInvalidWorkflow("recipe snapshot ingredient count does not match the formula")
+	}
+	for index, usage := range snapshot.Ingredients {
+		ingredient := formula.Ingredients[index]
+		if usage.Sequence != ingredient.Sequence ||
+			usage.IngredientName != ingredient.Name ||
+			usage.GramsPerLiter != ingredient.GramsPerLiter {
+			return errInvalidWorkflow("recipe line does not match its approved ingredient")
+		}
+		if usage.PlannedVolumeLiters != plannedVolume {
+			return errInvalidWorkflow("recipe line did not retain its calculation volume")
+		}
+		expected := ingredient.GramsPerLiter * plannedVolume
+		if math.Abs(usage.QuantityGrams-expected) > 0.0005 {
+			return fmt.Errorf("recipe quantity for %q is %g, expected %g",
+				usage.IngredientName, usage.QuantityGrams, expected)
+		}
 	}
 	return nil
 }
